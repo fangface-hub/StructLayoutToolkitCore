@@ -1,5 +1,5 @@
 """Bit-level operations for structured data layouts."""
-from src.sltcore.types import Info, InfoSize
+from sltcore.types import Info, InfoSize
 
 
 def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
@@ -27,16 +27,16 @@ def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
       the first bit of the extracted range aligns with the most
       significant bit of raw_value.
     """
-    # Extract only the necessary byte range
-    chunk = buf[offset.byte:offset.byte + size.required_bytes]
+    # Correct byte span (handles cross-byte bit ranges)
+    need = _required_bytes_for_extraction(offset, size)
 
-    # Convert to int
+    # Extract bytes
+    chunk = buf[offset.byte:offset.byte + need]
     value = int.from_bytes(chunk, "big")
 
-    # Right-shift to front-pack the extracted bits
-    shift = (size.required_bytes * 8) - size.bits - offset.bit
-    if shift > 0:
-        value >>= shift
+    # Front-pack
+    shift = (need * 8) - size.bits - offset.bit
+    value >>= shift
 
     # Mask to exact bit length
     value &= (1 << size.bits) - 1
@@ -51,21 +51,38 @@ def bits_set(buf: bytearray, offset: InfoSize, size: InfoSize,
     `value` is an integer whose lower `size.bits` bits are written.
     """
 
-    # Extract the target byte range
-    start = offset.byte
-    end = start + size.required_bytes
+    # Correct byte span
+    need = _required_bytes_for_extraction(offset, size)
 
-    # Read existing bytes as int
+    start = offset.byte
+    end = start + need
+
+    # Read existing bytes
     chunk = int.from_bytes(buf[start:end], "big")
 
-    # Compute shift amount (same as bits_get)
-    shift = (size.required_bytes * 8) - size.bits - offset.bit
+    # Compute shift
+    shift = (need * 8) - size.bits - offset.bit
 
-    # Build mask for the target bitfield
+    # Build mask
     mask = ((1 << size.bits) - 1) << shift
 
-    # Clear the target field and insert new value
+    # Clear target field and insert new value
     chunk = (chunk & ~mask) | ((value << shift) & mask)
 
     # Write back
-    buf[start:end] = chunk.to_bytes(size.required_bytes, "big")
+    buf[start:end] = chunk.to_bytes(need, "big")
+
+
+def _required_bytes_for_extraction(offset: InfoSize, size: InfoSize) -> int:
+    """
+    Calculates the number of bytes required to extract a bit slice
+    starting at the given offset and spanning the given size.
+
+    Parameters:
+    - offset (InfoSize): The bit offset from the start of the buffer.
+    - size (InfoSize): The number of bits to extract.
+
+    Returns:
+    - int: The number of bytes required to extract the specified bit slice.
+    """
+    return (offset.bit + size.bits + 7) // 8

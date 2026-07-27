@@ -37,11 +37,6 @@ class InfoSize:
         """Returns a bitmask corresponding to the size in bits."""
         return (1 << self.bits) - 1
 
-    @property
-    def required_bytes(self) -> int:
-        """Return the minimum number of bytes required to store this size."""
-        return (self.bits + 7) // 8
-
     def __add__(self, other: "InfoSize") -> "InfoSize":
         """ Adds two InfoSize instances together, returning a new InfoSize
             with the combined byte and bit counts, normalized to ensure
