@@ -104,26 +104,26 @@ def _float_from_bits(raw: int, bits: int) -> float:
        Supports 16, 32, and 64 bits.
     """
     if bits == 16:
-        # IEEE754 half precision
-        s = (raw >> 15) & 0x1
-        e = (raw >> 10) & 0x1F
-        f = raw & 0x3FF
+        """IEEE754 half-precision (16bit) → float32"""
+        s = (raw >> 15) & 0x0001
+        e = (raw >> 10) & 0x001F
+        f = raw & 0x03FF
 
         if e == 0:
             if f == 0:
-                return -0.0 if s else 0.0
+                return (-1)**s * 0.0
             return (-1)**s * (f / 2**10) * 2**(-14)
         elif e == 31:
             if f == 0:
-                return float('-inf') if s else float('inf')
+                return float('inf') if s == 0 else float('-inf')
             return float('nan')
         else:
             return (-1)**s * (1 + f / 2**10) * 2**(e - 15)
-
     elif bits == 32:
         # IEEE754 single precision
-        # struct を使わずに変換する高速版
+        # High-speed version without using struct
         s = (raw >> 31) & 0x1
+
         e = (raw >> 23) & 0xFF
         f = raw & 0x7FFFFF
 
