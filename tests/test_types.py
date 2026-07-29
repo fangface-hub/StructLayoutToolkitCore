@@ -1,4 +1,6 @@
 """Tests for sltcore.types."""
+import math
+
 import pytest
 
 from sltcore.types import Info, InfoSize
@@ -106,3 +108,83 @@ def test_info_to_float_invalid_size():
     """Test that invalid bit sizes for float conversion raise ValueError."""
     with pytest.raises(ValueError):
         Info(0, InfoSize(0, 10)).to_float
+
+
+def test_info_byte_swap():
+    """Test the byte_swap property."""
+    # 2 bytes swap
+    info = Info(0xAABB, InfoSize(2, 0))
+    swapped = info.byte_swap
+    assert swapped.raw_value == 0xBBAA
+    assert swapped.info_size == info.info_size
+
+    # 4 bytes swap
+    info = Info(0x11223344, InfoSize(4, 0))
+    swapped = info.byte_swap
+    assert swapped.raw_value == 0x44332211
+
+    # Check that it doesn't affect original
+    assert info.raw_value == 0x11223344
+
+
+def test_info_from_int():
+    """Test Info.from_int class method."""
+    size = InfoSize(0, 4)
+    # Should mask to 4 bits
+    info = Info.from_int(0xFF, size)
+    assert info.raw_value == 0x0F
+    assert info.info_size == size
+
+
+def test_info_from_bytes():
+    """Test Info.from_bytes class method."""
+    size = InfoSize(2, 0)
+    buf = b'\xAA\xBB\xCC'
+    info = Info.from_bytes(buf, size)
+    assert info.raw_value == 0xAABB
+    assert info.info_size == size
+
+
+def test_info_from_bytearray():
+    """Test Info.from_bytearray class method."""
+    size = InfoSize(1, 0)
+    buf = bytearray([0xDD, 0xEE])
+    info = Info.from_bytearray(buf, size)
+    assert info.raw_value == 0xDD
+    assert info.info_size == size
+
+
+def test_info_from_float():
+    """Test Info.from_float class method."""
+    # 32-bit float 1.0
+    size = InfoSize(0, 32)
+    info = Info.from_float(1.0, size)
+    assert info.raw_value == 0x3F800000
+
+    # Round trip
+    assert info.to_float == 1.0
+
+
+def test_info_from_float_special_values():
+    """Test Info.from_float with special values like infinity and NaN."""
+    # Infinity
+    info_inf = Info.from_float(float('inf'), InfoSize(0, 32))
+    assert info_inf.to_float == float('inf')
+
+    # Negative Infinity
+    info_ninf = Info.from_float(float('-inf'), InfoSize(0, 32))
+    assert info_ninf.to_float == float('-inf')
+
+    # NaN (Note: NaN != NaN, so we check using math.isnan)
+    info_nan = Info.from_float(float('nan'), InfoSize(0, 32))
+    assert math.isnan(info_nan.to_float)
+
+
+def test_info_from_float_zero():
+    """Test Info.from_float with zero values."""
+    info_pos_zero = Info.from_float(0.0, InfoSize(0, 32))
+    assert info_pos_zero.raw_value == 0x00000000
+
+    info_neg_zero = Info.from_float(-0.0, InfoSize(0, 32))
+    # In IEEE 754, -0.0 has the sign bit set
+    assert info_neg_zero.raw_value == 0x80000000

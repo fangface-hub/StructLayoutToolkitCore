@@ -1,4 +1,5 @@
 """Type definitions for structured data layouts and bit-level operations."""
+import math
 from dataclasses import dataclass
 
 
@@ -61,6 +62,31 @@ class Info:
     raw_value: int
     info_size: InfoSize
 
+    @classmethod
+    def from_int(cls, value: int, size: InfoSize):
+        """Creates an Info instance from an integer value, ensuring that
+           the value fits within the specified size by applying a bitmask. """
+        return cls(value & size.mask, size)
+
+    @classmethod
+    def from_bytes(cls, buf: bytes, size: InfoSize):
+        """Creates an Info instance from a bytes object, ensuring that
+           the value fits within the specified size by applying a bitmask."""
+        return cls(int.from_bytes(buf[:size.bytes], "big") & size.mask, size)
+
+    @classmethod
+    def from_bytearray(cls, buf: bytearray, size: InfoSize):
+        """Creates an Info instance from a bytearray, ensuring that
+           the value fits within the specified size by applying a bitmask."""
+        return cls(int.from_bytes(buf[:size.bytes], "big") & size.mask, size)
+
+    @classmethod
+    def from_float(cls, value: float, size: InfoSize):
+        """Creates an Info instance from a float value, converting it to
+           its raw bit representation based on the specified size."""
+        raw = _float_to_bits(value, size.bits)
+        return cls(raw, size)
+
     @property
     def to_unsigned_int(self) -> int:
         """Returns the extracted bits as an unsigned integer."""
@@ -97,6 +123,12 @@ class Info:
         raw_int = self.to_unsigned_int
         return _float_from_bits(raw_int, self.info_size.bits)
 
+    @property
+    def byte_swap(self) -> "Info":
+        """Returns a new Info instance with the byte order reversed."""
+        swapped_value = int.from_bytes(self.to_bytes[::-1], byteorder="big")
+        return Info(swapped_value, self.info_size)
+
 
 def _float_from_bits(raw: int, bits: int) -> float:
     """Converts a raw integer representation of a float
@@ -104,7 +136,7 @@ def _float_from_bits(raw: int, bits: int) -> float:
        Supports 16, 32, and 64 bits.
     """
     if bits == 16:
-        """IEEE754 half-precision (16bit) → float32"""
+        # IEEE754 half-precision (16bit) → float32
         s = (raw >> 15) & 0x0001
         e = (raw >> 10) & 0x001F
         f = raw & 0x03FF
@@ -156,3 +188,57 @@ def _float_from_bits(raw: int, bits: int) -> float:
             f"Unsupported bit size for float conversion: {bits}. ",
             "Only 16, 32, and 64 are supported."
         ]))
+
+
+def _float_to_bits(value: float, bits: int) -> int:
+    """Converts a Python float to its raw integer representation
+       based on the specified bit size. Supports 16, 32, and 64 bits.
+    """
+    # Determine the sign and absolute value
+    # Use math.copysign to correctly detect negative zero
+    sign = 1 if math.copysign(1.0, value) < 0 else 0
+    v = abs(value)
+
+    # Handle zero
+    if v == 0.0:
+        return sign << (bits - 1)
+
+    # NaN / Inf
+    if math.isnan(value):
+        if bits == 16:
+            return 0x7E00
+        if bits == 32:
+            return 0x7FC00000
+        if bits == 64:
+            return 0x7FF8000000000000
+
+    # Handle infinity
+    if math.isinf(value):
+        if bits == 16:
+            return (sign << 15) | 0x7C00
+        if bits == 32:
+            return (sign << 31) | 0x7F800000
+        if bits == 64:
+            return (sign << 63) | 0x7FF0000000000000
+
+    # Compute exponent and mantissa
+    e = int(math.floor(math.log(v, 2)))
+    mant = v / (2**e) - 1.0
+
+    if bits == 16:
+        exp = e + 15
+        frac = int(mant * (2**10))
+        return (sign << 15) | (exp << 10) | frac
+
+    elif bits == 32:
+        exp = e + 127
+        frac = int(mant * (2**23))
+        return (sign << 31) | (exp << 23) | frac
+
+    elif bits == 64:
+        exp = e + 1023
+        frac = int(mant * (2**52))
+        return (sign << 63) | (exp << 52) | frac
+
+    else:
+        raise ValueError(f"Unsupported float bit size: {bits}")

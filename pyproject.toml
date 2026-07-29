@@ -1,6 +1,6 @@
 [project]
 name = "sltcore"
-version = "0.1.0"
+version = "0.2.0"
 description = "A toolkit for handling structured data layouts and bit-level operations."
 readme = "README.md"
 authors = [
