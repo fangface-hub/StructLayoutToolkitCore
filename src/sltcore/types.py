@@ -1,13 +1,13 @@
 """Type definitions for structured data layouts and bit-level operations."""
 import math
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass(frozen=True)
 class InfoSize:
     """Represents a size in bytes and bits."""
-    byte: int = 0
-    bit: int = 0
+    byte: int = field(default=0, metadata={"desc": "byte size"})
+    bit: int = field(default=0, metadata={"desc": "bit size"})
 
     def __post_init__(self):
         """Ensures that the bit count is normalized to be less than 8,
@@ -59,8 +59,9 @@ class InfoSize:
 class Info:
     """Represents a slice of bits extracted from a bytearray,
        along with its size information."""
-    raw_value: int
-    info_size: InfoSize
+    raw_value: int = field(default=0, metadata={"desc": "raw integer value"})
+    info_size: InfoSize = field(default_factory=InfoSize,
+                                metadata={"desc": "size information"})
 
     @classmethod
     def from_int(cls, value: int, size: InfoSize):
