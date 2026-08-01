@@ -1,6 +1,20 @@
 """Type definitions for structured data layouts and bit-level operations."""
 import math
+import struct
 from dataclasses import dataclass, field
+
+
+def _has_struct_half():
+    """Checks if the current Python environment supports
+       half-precision (16-bit) floats in the struct module."""
+    try:
+        struct.pack(">e", 1.0)
+        return True
+    except struct.error:
+        return False
+
+
+HAS_STRUCT_HALF = _has_struct_half()  # ← 一度だけ実行
 
 
 @dataclass(frozen=True)
@@ -12,26 +26,27 @@ class InfoSize:
     def __post_init__(self):
         """Ensures that the bit count is normalized to be less than 8,
            and adjusts the byte count accordingly."""
-        extra_bytes, new_bits = divmod(self.bit, 8)
+        extra_bytes = self.bit >> 3
+        new_bits = self.bit & 7
         object.__setattr__(self, "byte", self.byte + extra_bytes)
         object.__setattr__(self, "bit", new_bits)
 
     @property
     def bits(self) -> int:
         """Returns the total size in bits."""
-        return self.byte * 8 + self.bit
+        return ((self.byte << 3) | self.bit)
 
     @property
     def bytes(self) -> int:
         """Returns the total size in bytes,
            rounding up if there are leftover bits."""
-        return (self.bits + 7) // 8  # round up
+        return ((self.bits + 7) >> 3)  # round up
 
     @property
     def hex_digits(self) -> int:
         """Returns the number of hexadecimal digits
            needed to represent the size in bits."""
-        return self.bits // 4
+        return (self.bits >> 2)
 
     @property
     def mask(self) -> int:
@@ -136,65 +151,52 @@ def _float_from_bits(raw: int, bits: int) -> float:
        to a Python float, based on the specified bit size.
        Supports 16, 32, and 64 bits.
     """
-    if bits == 16:
-        # IEEE754 half-precision (16bit) → float32
-        s = (raw >> 15) & 0x0001
-        e = (raw >> 10) & 0x001F
-        f = raw & 0x03FF
-
-        if e == 0:
-            if f == 0:
-                return (-1)**s * 0.0
-            return (-1)**s * (f / 2**10) * 2**(-14)
-        elif e == 31:
-            if f == 0:
-                return float('inf') if s == 0 else float('-inf')
-            return float('nan')
-        else:
-            return (-1)**s * (1 + f / 2**10) * 2**(e - 15)
-    elif bits == 32:
-        # IEEE754 single precision
-        # High-speed version without using struct
-        s = (raw >> 31) & 0x1
-
-        e = (raw >> 23) & 0xFF
-        f = raw & 0x7FFFFF
-
-        if e == 0:
-            return (-1)**s * (f / 2**23) * 2**(-126)
-        elif e == 255:
-            if f == 0:
-                return float('-inf') if s else float('inf')
-            return float('nan')
-        else:
-            return (-1)**s * (1 + f / 2**23) * 2**(e - 127)
-
-    elif bits == 64:
-        # IEEE754 double precision
-        s = (raw >> 63) & 0x1
-        e = (raw >> 52) & 0x7FF
-        f = raw & 0xFFFFFFFFFFFFF
-
-        if e == 0:
-            return (-1)**s * (f / 2**52) * 2**(-1022)
-        elif e == 2047:
-            if f == 0:
-                return float('-inf') if s else float('inf')
-            return float('nan')
-        else:
-            return (-1)**s * (1 + f / 2**52) * 2**(e - 1023)
-
-    else:
-        raise ValueError(''.join([
-            f"Unsupported bit size for float conversion: {bits}. ",
+    if bits == 64:
+        return struct.unpack('>d', struct.pack('>Q', raw))[0]
+    if bits == 32:
+        # Use struct to unpack the integer as a float
+        return struct.unpack('>f', struct.pack('>I', raw))[0]
+    if bits != 16:
+        raise ValueError("".join([
+            f"Unsupported float bit size: {bits}. ",
             "Only 16, 32, and 64 are supported."
         ]))
+    if HAS_STRUCT_HALF:
+        # Use struct to unpack the integer as a half-precision float
+        return struct.unpack('>e', struct.pack('>H', raw))[0]
+    # IEEE754 half-precision (16bit) → float32
+    s = (raw >> 15) & 0x0001
+    e = (raw >> 10) & 0x001F
+    f = raw & 0x03FF
+
+    if e == 0:
+        if f == 0:
+            return (-1)**s * 0.0
+        return (-1)**s * (f / 2**10) * 2**(-14)
+    if e == 31:
+        if f == 0:
+            return float('inf') if s == 0 else float('-inf')
+        return float('nan')
+    return (-1)**s * (1 + f / 2**10) * 2**(e - 15)
 
 
 def _float_to_bits(value: float, bits: int) -> int:
     """Converts a Python float to its raw integer representation
        based on the specified bit size. Supports 16, 32, and 64 bits.
     """
+    if bits == 64:
+        return struct.unpack('>Q', struct.pack('>d', value))[0]
+    if bits == 32:
+        # Use struct to pack the float into bytes and then unpack as an integer
+        return struct.unpack('>I', struct.pack('>f', value))[0]
+    if bits != 16:
+        raise ValueError("".join([
+            f"Unsupported float bit size: {bits}. ",
+            "Only 16, 32, and 64 are supported."
+        ]))
+    if HAS_STRUCT_HALF:
+        # Use struct to pack the float into bytes and then unpack as an integer
+        return struct.unpack('>H', struct.pack('>e', value))[0]
     # Determine the sign and absolute value
     # Use math.copysign to correctly detect negative zero
     sign = 1 if math.copysign(1.0, value) < 0 else 0
@@ -206,40 +208,16 @@ def _float_to_bits(value: float, bits: int) -> int:
 
     # NaN / Inf
     if math.isnan(value):
-        if bits == 16:
-            return 0x7E00
-        if bits == 32:
-            return 0x7FC00000
-        if bits == 64:
-            return 0x7FF8000000000000
+        return 0x7E00
 
     # Handle infinity
     if math.isinf(value):
-        if bits == 16:
-            return (sign << 15) | 0x7C00
-        if bits == 32:
-            return (sign << 31) | 0x7F800000
-        if bits == 64:
-            return (sign << 63) | 0x7FF0000000000000
+        return (sign << 15) | 0x7C00
 
     # Compute exponent and mantissa
     e = int(math.floor(math.log(v, 2)))
     mant = v / (2**e) - 1.0
 
-    if bits == 16:
-        exp = e + 15
-        frac = int(mant * (2**10))
-        return (sign << 15) | (exp << 10) | frac
-
-    elif bits == 32:
-        exp = e + 127
-        frac = int(mant * (2**23))
-        return (sign << 31) | (exp << 23) | frac
-
-    elif bits == 64:
-        exp = e + 1023
-        frac = int(mant * (2**52))
-        return (sign << 63) | (exp << 52) | frac
-
-    else:
-        raise ValueError(f"Unsupported float bit size: {bits}")
+    exp = e + 15
+    frac = int(mant * (2**10))
+    return (sign << 15) | (exp << 10) | frac
