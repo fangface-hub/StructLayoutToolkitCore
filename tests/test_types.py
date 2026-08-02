@@ -168,6 +168,21 @@ def test_info_from_unsigned_int_preserves_small_values():
     assert info.to_unsigned_int == 0x7A
 
 
+def test_info_from_bool():
+    """Test Info.from_bool class method."""
+    size = InfoSize(0, 1)
+
+    true_info = Info.from_bool(True, size)
+    assert true_info.raw_value == 0x01
+    assert true_info.info_size == size
+    assert true_info.to_bool is True
+
+    false_info = Info.from_bool(False, size)
+    assert false_info.raw_value == 0x00
+    assert false_info.info_size == size
+    assert false_info.to_bool is False
+
+
 def test_info_from_bytes():
     """Test Info.from_bytes class method."""
     size = InfoSize(2, 0)

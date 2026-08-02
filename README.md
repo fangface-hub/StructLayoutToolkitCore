@@ -71,6 +71,7 @@ This allows higher‑level code to treat extracted fields as structured units ra
 
   | Classmethod | Description |
   | --- | --- |
+  | from_bool | Creates an Info instance from a boolean value. |
   | from_signed_int | Creates an Info instance from a signed integer value using two's-complement encoding for the requested bit width. |
   | from_unsigned_int | Creates an Info instance from an unsigned integer value while masking it to the requested bit width. |
   | from_bytes | Creates an Info instance from a bytes object, ensuring that the value fits within the specified size by applying a bitmask. |
