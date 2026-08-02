@@ -2,6 +2,7 @@
 import math
 import struct
 from dataclasses import dataclass, field
+from functools import total_ordering
 
 
 def _has_struct_half():
@@ -17,6 +18,7 @@ def _has_struct_half():
 HAS_STRUCT_HALF = _has_struct_half()  # ← 一度だけ実行
 
 
+@total_ordering
 @dataclass(frozen=True)
 class InfoSize:
     """Represents a size in bytes and bits."""
@@ -31,22 +33,38 @@ class InfoSize:
         object.__setattr__(self, "byte", self.byte + extra_bytes)
         object.__setattr__(self, "bit", new_bits)
 
+    def __str__(self) -> str:
+        """Returns a string representation of the size
+           in the format 'X bytes, Y bits'."""
+        return f"{self.byte} bytes, {self.bit} bits"
+
+    def __eq__(self, other: object) -> bool:
+        """Checks equality between two InfoSize instances
+           based on their total size in bits."""
+        if not isinstance(other, InfoSize):
+            return NotImplemented
+        return self.bits == other.bits
+
+    def __lt__(self, other: "InfoSize") -> bool:
+        """Compares two InfoSize instances based on their total size in bits."""
+        return self.bits < other.bits
+
     @property
     def bits(self) -> int:
         """Returns the total size in bits."""
-        return ((self.byte << 3) | self.bit)
+        return (self.byte << 3) | self.bit
 
     @property
     def bytes(self) -> int:
         """Returns the total size in bytes,
            rounding up if there are leftover bits."""
-        return ((self.bits + 7) >> 3)  # round up
+        return (self.bits + 7) >> 3
 
     @property
     def hex_digits(self) -> int:
         """Returns the number of hexadecimal digits
            needed to represent the size in bits."""
-        return (self.bits >> 2)
+        return self.bits >> 2
 
     @property
     def mask(self) -> int:
@@ -70,6 +88,7 @@ class InfoSize:
         return InfoSize(0, total_bits)
 
 
+@total_ordering
 @dataclass(frozen=True)
 class Info:
     """Represents a slice of bits extracted from a bytearray,
@@ -77,6 +96,28 @@ class Info:
     raw_value: int = field(default=0, metadata={"desc": "raw integer value"})
     info_size: InfoSize = field(default_factory=InfoSize,
                                 metadata={"desc": "size information"})
+
+    def __str__(self) -> str:
+        """Returns a string representation of the Info instance,
+           showing the raw value and its size."""
+        return f"Info(raw_value={self.raw_value}, info_size={self.info_size})"
+
+    def __eq__(self, other: object) -> bool:
+        """Checks equality between two Info instances based on their raw values
+           and size information."""
+        if not isinstance(other, Info):
+            return NotImplemented
+        return (self.raw_value == other.raw_value
+                and self.info_size == other.info_size)
+
+    def __lt__(self, other: "Info") -> bool:
+        """Compares two Info instances based on their raw values
+           and size information."""
+        if not isinstance(other, Info):
+            return NotImplemented
+        if self.info_size != other.info_size:
+            return self.info_size < other.info_size
+        return self.raw_value < other.raw_value
 
     @classmethod
     def from_int(cls, value: int, size: InfoSize):
