@@ -93,7 +93,8 @@ class InfoSize:
 class Info:
     """Represents a slice of bits extracted from a bytearray,
        along with its size information."""
-    raw_value: int = field(default=0, metadata={"desc": "raw integer value"})
+    raw_value: int | bytearray = field(
+        default=0, metadata={"desc": "raw value as integer or bytearray"})
     info_size: InfoSize = field(default_factory=InfoSize,
                                 metadata={"desc": "size information"})
 
@@ -117,7 +118,7 @@ class Info:
             return NotImplemented
         if self.info_size != other.info_size:
             return self.info_size < other.info_size
-        return self.raw_value < other.raw_value
+        return self.to_unsigned_int < other.to_unsigned_int
 
     @classmethod
     def from_int(cls, value: int, size: InfoSize):
@@ -129,12 +130,16 @@ class Info:
     def from_bytes(cls, buf: bytes, size: InfoSize):
         """Creates an Info instance from a bytes object, ensuring that
            the value fits within the specified size by applying a bitmask."""
+        if size.bit == 0:
+            return cls(bytearray(buf), size)
         return cls(int.from_bytes(buf[:size.bytes], "big") & size.mask, size)
 
     @classmethod
     def from_bytearray(cls, buf: bytearray, size: InfoSize):
         """Creates an Info instance from a bytearray, ensuring that
            the value fits within the specified size by applying a bitmask."""
+        if size.bit == 0:
+            return cls(bytearray(buf), size)
         return cls(int.from_bytes(buf[:size.bytes], "big") & size.mask, size)
 
     @classmethod
@@ -147,6 +152,9 @@ class Info:
     @property
     def to_unsigned_int(self) -> int:
         """Returns the extracted bits as an unsigned integer."""
+        if isinstance(self.raw_value, bytearray):
+            return int.from_bytes(self.raw_value[:self.info_size.bytes],
+                                  "big") & self.info_size.mask
         return self.raw_value
 
     @property
@@ -165,8 +173,10 @@ class Info:
     @property
     def to_bytes(self) -> bytes:
         """Returns the extracted bits as a bytes object."""
-        value = self.to_unsigned_int
         byte_len = self.info_size.bytes
+        if isinstance(self.raw_value, bytearray):
+            return bytes(self.raw_value[:byte_len])
+        value = self.to_unsigned_int
         return value.to_bytes(byte_len, byteorder="big")
 
     @property

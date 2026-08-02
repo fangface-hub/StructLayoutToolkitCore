@@ -141,7 +141,8 @@ def test_info_from_bytes():
     size = InfoSize(2, 0)
     buf = b'\xAA\xBB\xCC'
     info = Info.from_bytes(buf, size)
-    assert info.raw_value == 0xAABB
+    assert isinstance(info.raw_value, bytearray)
+    assert info.raw_value == bytearray([0xAA, 0xBB, 0xCC])
     assert info.info_size == size
 
 
@@ -150,8 +151,20 @@ def test_info_from_bytearray():
     size = InfoSize(1, 0)
     buf = bytearray([0xDD, 0xEE])
     info = Info.from_bytearray(buf, size)
-    assert info.raw_value == 0xDD
+    assert isinstance(info.raw_value, bytearray)
+    assert info.raw_value == bytearray([0xDD, 0xEE])
     assert info.info_size == size
+
+
+def test_info_from_bytearray_returns_copy_for_byte_aligned_size():
+    """Byte-aligned from_bytearray should keep a copy, not source reference."""
+    size = InfoSize(2, 0)
+    source = bytearray([0x10, 0x20])
+
+    info = Info.from_bytearray(source, size)
+    source[0] = 0xFF
+
+    assert info.raw_value == bytearray([0x10, 0x20])
 
 
 def test_info_from_float():

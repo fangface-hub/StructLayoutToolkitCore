@@ -27,6 +27,10 @@ def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
       the first bit of the extracted range aligns with the most
       significant bit of raw_value.
     """
+    if offset.bit == 0 and size.bit == 0:
+        return Info(raw_value=buf[offset.byte:offset.byte + size.byte],
+                    info_size=size)
+
     # Correct byte span (handles cross-byte bit ranges)
     need = _required_bytes_for_extraction(offset, size)
 
@@ -45,11 +49,16 @@ def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
 
 
 def bits_set(buf: bytearray, offset: InfoSize, size: InfoSize,
-             value: int) -> None:
+             value: int | bytearray) -> None:
     """
     Set a bit slice in `buf` starting at `offset` and spanning `size`.
     `value` is an integer whose lower `size.bits` bits are written.
     """
+    if isinstance(value, bytearray):
+        if offset.bit == 0 and size.bit == 0:
+            buf[offset.byte:offset.byte + size.byte] = value[:size.byte]
+            return
+        value = int.from_bytes(value[:size.bytes], "big") & size.mask
 
     # Correct byte span
     need = _required_bytes_for_extraction(offset, size)

@@ -64,7 +64,7 @@ This allows higher‑level code to treat extracted fields as structured units ra
 
   | Field | Type | Description |
   | --- | --- | --- |
-  | raw_value | int | The internal integer representation of the field.<br>It is obtained by converting the corresponding bytes into an integer and applying the size mask so that the value fits within the bit width specified by InfoSize. |
+  | raw_value | int or bytearray | The internal integer representation of the field.<br>It is obtained by converting the corresponding bytes into an integer and applying the size mask so that the value fits within the bit width specified by InfoSize. |
   | info_size | InfoSize | Size descriptor for this value.<br>It provides the byte and bit length of the field and determines how the raw_value is masked, extracted, and written back into the byte sequence. |
 
 - __Classmethod List__

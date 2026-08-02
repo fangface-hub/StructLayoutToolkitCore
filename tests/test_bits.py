@@ -85,3 +85,45 @@ def test_bits_get_set_roundtrip():
     after = bits_get(buf, offset, size).raw_value
 
     assert original == after
+
+
+def test_bits_get_byte_aligned_returns_slice():
+    """When both offset.bit and size.bit are 0,
+       raw_value is a bytearray slice."""
+    buf = bytearray([0x11, 0x22, 0x33, 0x44])
+    info = bits_get(buf, InfoSize(1, 0), InfoSize(2, 0))
+
+    assert isinstance(info.raw_value, bytearray)
+    assert info.raw_value == bytearray([0x22, 0x33])
+    assert info.info_size == InfoSize(2, 0)
+
+
+def test_bits_get_zero_size_byte_aligned_returns_empty_slice():
+    """Byte-aligned zero-length extraction should return an empty slice."""
+    buf = bytearray([0xAA, 0xBB])
+    info = bits_get(buf, InfoSize(1, 0), InfoSize(0, 0))
+
+    assert isinstance(info.raw_value, bytearray)
+    assert info.raw_value == bytearray()
+    assert info.info_size == InfoSize(0, 0)
+
+
+def test_bits_set_bytearray_byte_aligned_sets_slice():
+    """Byte-aligned write with bytearray value should set target slice."""
+    buf = bytearray([0x00, 0x00, 0x00, 0x00])
+
+    bits_set(buf, InfoSize(1, 0), InfoSize(2, 0), bytearray([0xAA, 0xBB]))
+
+    assert buf == bytearray([0x00, 0xAA, 0xBB, 0x00])
+
+
+def test_bits_set_bytearray_non_aligned_uses_lower_bits_path():
+    """Non-aligned bytearray write uses lower bits like integer writes."""
+    buf = bytearray([0b11110000, 0b00001111])
+    offset = InfoSize(0, 6)
+    size = InfoSize(0, 6)
+
+    bits_set(buf, offset, size, bytearray([0b10101000]))
+    info = bits_get(buf, offset, size)
+
+    assert info.raw_value == 0b101000
