@@ -71,7 +71,8 @@ This allows higher‑level code to treat extracted fields as structured units ra
 
   | Classmethod | Description |
   | --- | --- |
-  | from_int | Creates an Info instance from an integer value, ensuring that the value fits within the specified size by applying a bitmask. |
+  | from_signed_int | Creates an Info instance from a signed integer value using two's-complement encoding for the requested bit width. |
+  | from_unsigned_int | Creates an Info instance from an unsigned integer value while masking it to the requested bit width. |
   | from_bytes | Creates an Info instance from a bytes object, ensuring that the value fits within the specified size by applying a bitmask. |
   | from_bytearray | Creates an Info instance from a bytearray, ensuring that the value fits within the specified size by applying a bitmask. |
   | from_float | Creates an Info instance from a float value, converting it to its raw bit representation based on the specified size. |

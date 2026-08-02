@@ -127,13 +127,45 @@ def test_info_byte_swap():
     assert info.raw_value == 0x11223344
 
 
-def test_info_from_int():
-    """Test Info.from_int class method."""
+def test_info_from_signed_int():
+    """Test Info.from_signed_int class method."""
     size = InfoSize(0, 4)
     # Should mask to 4 bits
-    info = Info.from_int(0xFF, size)
+    info = Info.from_signed_int(0xFF, size)
     assert info.raw_value == 0x0F
     assert info.info_size == size
+
+
+def test_info_from_signed_int_uses_two_complement_for_negative_values():
+    """Negative values should be encoded as two's complement within the size."""
+    size = InfoSize(0, 8)
+
+    info = Info.from_signed_int(-1, size)
+    assert info.raw_value == 0xFF
+    assert info.to_signed_int == -1
+
+    info = Info.from_signed_int(-128, size)
+    assert info.raw_value == 0x80
+    assert info.to_signed_int == -128
+
+
+def test_info_from_unsigned_int_masks_to_size():
+    """Info.from_unsigned_int should keep only the requested bit width."""
+    size = InfoSize(0, 4)
+
+    info = Info.from_unsigned_int(0xFF, size)
+    assert info.raw_value == 0x0F
+    assert info.info_size == size
+    assert info.to_unsigned_int == 0x0F
+
+
+def test_info_from_unsigned_int_preserves_small_values():
+    """Small unsigned values should remain unchanged when they fit the size."""
+    size = InfoSize(0, 8)
+
+    info = Info.from_unsigned_int(0x7A, size)
+    assert info.raw_value == 0x7A
+    assert info.to_unsigned_int == 0x7A
 
 
 def test_info_from_bytes():

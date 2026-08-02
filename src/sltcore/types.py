@@ -121,10 +121,24 @@ class Info:
         return self.to_unsigned_int < other.to_unsigned_int
 
     @classmethod
-    def from_int(cls, value: int, size: InfoSize):
-        """Creates an Info instance from an integer value, ensuring that
-           the value fits within the specified size by applying a bitmask. """
+    def from_unsigned_int(cls, value: int, size: InfoSize):
+        """Creates an Info instance from an unsigned integer value,
+           ensuring that the value fits within the specified size by
+           applying a bitmask."""
         return cls(value & size.mask, size)
+
+    @classmethod
+    def from_signed_int(cls, value: int, size: InfoSize):
+        """Creates an Info instance from a signed integer value using two's
+           complement encoding for the requested bit width."""
+        if size.bits == 0:
+            return cls(0, size)
+        return cls(value % (1 << size.bits), size)
+
+    @classmethod
+    def from_int(cls, value: int, size: InfoSize):
+        """Backward-compatible alias for from_signed_int."""
+        return cls.from_signed_int(value, size)
 
     @classmethod
     def from_bytes(cls, buf: bytes, size: InfoSize):
