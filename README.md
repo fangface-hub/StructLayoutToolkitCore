@@ -17,7 +17,7 @@ After installing the package, you can:
 
 ```python
 
-from sltcore import InfoSize, Info , bits_get, bits_set
+from sltcore import InfoSize, Info, bits_get, bits_set
 
 buf = bytearray(b"\x12\x34\x56\x78")
 
@@ -26,7 +26,11 @@ value = bits_get(buf, InfoSize(1, 0), InfoSize(0, 4))
 print(value.to_hex)  # 0x3
 
 # Write 5 bits at offset (2 bytes, 3 bits)
-bits_set(buf, InfoSize(2, 3), InfoSize(0, 5), 0b10101)
+bits_set(
+  buf,
+  InfoSize(2, 3),
+  Info(0b10101, InfoSize(0, 5)),
+)
 print(buf.hex()) # 12345578
 
 ```

@@ -2,7 +2,7 @@
 import pytest
 
 from sltcore.bits import _required_bytes_for_extraction, bits_get, bits_set
-from sltcore.types import InfoSize
+from sltcore.types import Info, InfoSize
 
 
 def test_required_bytes_for_extraction():
@@ -50,7 +50,7 @@ def test_bits_set_single_byte():
     offset = InfoSize(0, 2)
     size = InfoSize(0, 4)
 
-    bits_set(buf, offset, size, 0b0011)
+    bits_set(buf, offset, Info(0b0011, size))
     # 11110000 → offset=2 → bits to change: 1100 → write 0011
     assert buf[0] == 0b11001100
 
@@ -61,7 +61,7 @@ def test_bits_set_cross_byte():
     offset = InfoSize(0, 6)
     size = InfoSize(0, 6)
 
-    bits_set(buf, offset, size, 0b101010)
+    bits_set(buf, offset, Info(0b101010, size))
 
     # Comparing with a manually calculated mask is fine, but
     # confirming it matches by re-extracting with bits_get
@@ -81,7 +81,7 @@ def test_bits_get_set_roundtrip():
     # Verify original value is restored through get -> set cycle
     original = bits_get(buf, offset, size).raw_value
 
-    bits_set(buf, offset, size, original)
+    bits_set(buf, offset, Info(original, size))
     after = bits_get(buf, offset, size).raw_value
 
     assert original == after
@@ -112,7 +112,11 @@ def test_bits_set_bytearray_byte_aligned_sets_slice():
     """Byte-aligned write with bytearray value should set target slice."""
     buf = bytearray([0x00, 0x00, 0x00, 0x00])
 
-    bits_set(buf, InfoSize(1, 0), InfoSize(2, 0), bytearray([0xAA, 0xBB]))
+    bits_set(
+        buf,
+        InfoSize(1, 0),
+        Info(bytearray([0xAA, 0xBB]), InfoSize(2, 0)),
+    )
 
     assert buf == bytearray([0x00, 0xAA, 0xBB, 0x00])
 
@@ -123,7 +127,11 @@ def test_bits_set_bytearray_non_aligned_uses_lower_bits_path():
     offset = InfoSize(0, 6)
     size = InfoSize(0, 6)
 
-    bits_set(buf, offset, size, bytearray([0b10101000]))
+    bits_set(
+        buf,
+        offset,
+        Info(bytearray([0b10101000]), InfoSize(0, 6)),
+    )
     info = bits_get(buf, offset, size)
 
     assert info.raw_value == 0b101000

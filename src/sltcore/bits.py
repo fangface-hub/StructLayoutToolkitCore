@@ -48,20 +48,26 @@ def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
     return Info(raw_value=value, info_size=size)
 
 
-def bits_set(buf: bytearray, offset: InfoSize, size: InfoSize,
-             value: int | bytearray) -> None:
+def bits_set(buf: bytearray, offset: InfoSize, value: Info) -> None:
     """
-    Set a bit slice in `buf` starting at `offset` and spanning `size`.
-    `value` is an integer whose lower `size.bits` bits are written.
+    Set a bit slice in `buf` starting at `offset`.
+    `value.info_size` defines the target width and `value` provides
+    the raw data to be written.
     """
-    if isinstance(value, bytearray):
-        if offset.bit == 0 and size.bit == 0:
-            buf[offset.byte:offset.byte + size.byte] = value[:size.byte]
+    write_size = value.info_size
+
+    if isinstance(value.raw_value, bytearray):
+        if offset.bit == 0 and write_size.bit == 0:
+            buf[offset.byte:offset.byte +
+                write_size.byte] = (value.raw_value[:write_size.byte])
             return
-        value = int.from_bytes(value[:size.bytes], "big") & size.mask
+        raw_value = (int.from_bytes(value.raw_value[:write_size.bytes], "big")
+                     & write_size.mask)
+    else:
+        raw_value = value.to_unsigned_int & write_size.mask
 
     # Correct byte span
-    need = _required_bytes_for_extraction(offset, size)
+    need = _required_bytes_for_extraction(offset, write_size)
 
     start = offset.byte
     end = start + need
@@ -70,13 +76,13 @@ def bits_set(buf: bytearray, offset: InfoSize, size: InfoSize,
     chunk = int.from_bytes(buf[start:end], "big")
 
     # Compute shift
-    shift = (need * 8) - size.bits - offset.bit
+    shift = (need * 8) - write_size.bits - offset.bit
 
     # Build mask
-    mask = ((1 << size.bits) - 1) << shift
+    mask = ((1 << write_size.bits) - 1) << shift
 
     # Clear target field and insert new value
-    chunk = (chunk & ~mask) | ((value << shift) & mask)
+    chunk = (chunk & ~mask) | ((raw_value << shift) & mask)
 
     # Write back
     buf[start:end] = chunk.to_bytes(need, "big")

@@ -1,6 +1,6 @@
 [project]
 name = "sltcore"
-version = "0.2.7"
+version = "1.0.0"
 license = "MIT"
 license-files = ["LICENSE"]
 description = "A toolkit for handling structured data layouts and bit-level operations."
