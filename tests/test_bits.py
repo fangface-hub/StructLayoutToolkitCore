@@ -1,5 +1,4 @@
 """Tests for sltcore.bits."""
-import pytest
 
 from sltcore.bits import _required_bytes_for_extraction, bits_get, bits_set
 from sltcore.types import Info, InfoSize
@@ -28,8 +27,9 @@ def test_bits_get_single_byte():
     offset = InfoSize(0, 2)  # bit offset = 2
     size = InfoSize(0, 4)  # 4 bits
 
-    info = bits_get(buf, offset, size)
+    info = bits_get(buf, offset, size, scale=0.5)
     assert info.raw_value == 0b0101  # 214 = 11010110 → offset=2 → 0101
+    assert info.scale == 0.5
 
 
 def test_bits_get_cross_byte():
@@ -38,10 +38,11 @@ def test_bits_get_cross_byte():
     offset = InfoSize(0, 6)  # From bit 6 of byte0
     size = InfoSize(0, 6)  # Extract 6 bits (spans into byte1)
 
-    info = bits_get(buf, offset, size)
+    info = bits_get(buf, offset, size, scale=0.25)
     # 11110000 00001111
     #       ^^ ^^^^
     assert info.raw_value == 0b000000  # front-packed
+    assert info.scale == 0.25
 
 
 def test_bits_set_single_byte():
@@ -91,11 +92,12 @@ def test_bits_get_byte_aligned_returns_slice():
     """When both offset.bit and size.bit are 0,
        raw_value is a bytearray slice."""
     buf = bytearray([0x11, 0x22, 0x33, 0x44])
-    info = bits_get(buf, InfoSize(1, 0), InfoSize(2, 0))
+    info = bits_get(buf, InfoSize(1, 0), InfoSize(2, 0), scale=2.0)
 
     assert isinstance(info.raw_value, bytearray)
     assert info.raw_value == bytearray([0x22, 0x33])
     assert info.info_size == InfoSize(2, 0)
+    assert info.scale == 2.0
 
 
 def test_bits_get_zero_size_byte_aligned_returns_empty_slice():

@@ -2,17 +2,23 @@
 from sltcore.types import Info, InfoSize
 
 
-def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
-    """ Extracts a slice of bits from the given bytearray
-        starting at the specified bit offset and spanning
-        the specified bit size. Returns an Info object containing
-        the extracted raw value and an InfoSize representing
-        the size of the extracted data.
+def bits_get(buf: bytearray,
+             offset: InfoSize,
+             size: InfoSize,
+             scale: float = 1.0) -> Info:
+    """Extracts a slice of bits from the given bytearray
+       starting at the specified bit offset and spanning
+       the specified bit size. Returns an Info object containing
+       the extracted raw value and an InfoSize representing
+       the size of the extracted data.
+       the `scale` parameter represents the LSB weight used
+         for value normalization.
     Parameters:
     - buf (bytearray): The source bytearray to extract bits from.
     - offset (InfoSize): The bit offset from the start of buf to begin
       extraction.
     - size (InfoSize): The number of bits to extract.
+    - scale (float): The LSB weight used for value normalization.
 
     Returns:
     - Info: An Info object where raw_value contains the extracted bits as an
@@ -29,7 +35,8 @@ def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
     """
     if offset.bit == 0 and size.bit == 0:
         return Info(raw_value=buf[offset.byte:offset.byte + size.byte],
-                    info_size=size)
+                    info_size=size,
+                    scale=scale)
 
     # Correct byte span (handles cross-byte bit ranges)
     need = _required_bytes_for_extraction(offset, size)
@@ -45,7 +52,7 @@ def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
     # Mask to exact bit length
     value &= (1 << size.bits) - 1
 
-    return Info(raw_value=value, info_size=size)
+    return Info(raw_value=value, info_size=size, scale=scale)
 
 
 def bits_set(buf: bytearray, offset: InfoSize, value: Info) -> None:
