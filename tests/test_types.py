@@ -58,7 +58,7 @@ def test_infosize_arithmetic():
     assert subbed.bits == s1.bits - s2.bits
 
     with pytest.raises(ValueError):
-        s2 - s1
+        _ = s2 - s1
 
 
 def test_info_to_signed_int():
@@ -104,19 +104,32 @@ def test_info_to_float_64():
     assert Info(0x3FF0000000000000, InfoSize(0, 64)).to_float == 1.0
 
 
-def test_info_to_float_invalid_size():
-    """Test that invalid bit sizes for float conversion raise ValueError."""
-    with pytest.raises(ValueError):
-        Info(0, InfoSize(0, 10)).to_float
+def test_info_scale_applies_to_integer_widths():
+    """Scaled integer widths should convert through the scale factor."""
+    info = Info(10, InfoSize(0, 10), scale=0.5)
+
+    assert info.to_float == 5.0
+    assert info.to_int == 5
+
+
+def test_info_from_float_uses_scale_for_integer_widths():
+    """Scaled from_float should quantize through the scale factor."""
+    size = InfoSize(0, 10)
+    info = Info.from_float(5.0, size, scale=0.5)
+
+    assert info.raw_value == 10
+    assert info.scale == 0.5
+    assert info.to_float == 5.0
 
 
 def test_info_byte_swap():
     """Test the byte_swap property."""
     # 2 bytes swap
-    info = Info(0xAABB, InfoSize(2, 0))
+    info = Info(0xAABB, InfoSize(2, 0), scale=0.25)
     swapped = info.byte_swap
     assert swapped.raw_value == 0xBBAA
     assert swapped.info_size == info.info_size
+    assert swapped.scale == info.scale
 
     # 4 bytes swap
     info = Info(0x11223344, InfoSize(4, 0))

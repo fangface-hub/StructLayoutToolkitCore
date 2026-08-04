@@ -15,9 +15,6 @@ def _has_struct_half():
         return False
 
 
-HAS_STRUCT_HALF = _has_struct_half()  # ← 一度だけ実行
-
-
 @total_ordering
 @dataclass(frozen=True)
 class InfoSize:
@@ -97,11 +94,15 @@ class Info:
         default=0, metadata={"desc": "raw value as integer or bytearray"})
     info_size: InfoSize = field(default_factory=InfoSize,
                                 metadata={"desc": "size information"})
+    scale: float = field(default=1.0, metadata={"desc": "LSB scale"})
 
     def __str__(self) -> str:
         """Returns a string representation of the Info instance,
            showing the raw value and its size."""
-        return f"Info(raw_value={self.raw_value}, info_size={self.info_size})"
+        return ("Info("
+                f"raw_value={self.raw_value}, "
+                f"info_size={self.info_size}, "
+                f"scale={self.scale})")
 
     def __eq__(self, other: object) -> bool:
         """Checks equality between two Info instances based on their raw values
@@ -109,7 +110,8 @@ class Info:
         if not isinstance(other, Info):
             return NotImplemented
         return (self.raw_value == other.raw_value
-                and self.info_size == other.info_size)
+                and self.info_size == other.info_size
+                and self.scale == other.scale)
 
     def __lt__(self, other: "Info") -> bool:
         """Compares two Info instances based on their raw values
@@ -118,50 +120,57 @@ class Info:
             return NotImplemented
         if self.info_size != other.info_size:
             return self.info_size < other.info_size
-        return self.to_unsigned_int < other.to_unsigned_int
+        return self.to_float < other.to_float
 
     @classmethod
-    def from_unsigned_int(cls, value: int, size: InfoSize):
+    def from_unsigned_int(cls, value: int, size: InfoSize, scale: float = 1.0):
         """Creates an Info instance from an unsigned integer value,
            ensuring that the value fits within the specified size by
            applying a bitmask."""
-        return cls(value & size.mask, size)
+        return cls(value & size.mask, size, scale)
 
     @classmethod
-    def from_bool(cls, value: bool, size: InfoSize):
+    def from_bool(cls, value: bool, size: InfoSize, scale: float = 1.0):
         """Creates an Info instance from a boolean value."""
-        return cls.from_unsigned_int(int(value), size)
+        return cls.from_unsigned_int(int(value), size, scale)
 
     @classmethod
-    def from_signed_int(cls, value: int, size: InfoSize):
+    def from_signed_int(cls, value: int, size: InfoSize, scale: float = 1.0):
         """Creates an Info instance from a signed integer value using two's
            complement encoding for the requested bit width."""
         if size.bits == 0:
-            return cls(0, size)
-        return cls(value % (1 << size.bits), size)
+            return cls(0, size, scale)
+        return cls(value % (1 << size.bits), size, scale)
 
     @classmethod
-    def from_bytes(cls, buf: bytes, size: InfoSize):
+    def from_bytes(cls, buf: bytes, size: InfoSize, scale: float = 1.0):
         """Creates an Info instance from a bytes object, ensuring that
            the value fits within the specified size by applying a bitmask."""
         if size.bit == 0:
-            return cls(bytearray(buf), size)
-        return cls(int.from_bytes(buf[:size.bytes], "big") & size.mask, size)
+            return cls(bytearray(buf), size, scale)
+        return cls(
+            int.from_bytes(buf[:size.bytes], "big") & size.mask, size, scale)
 
     @classmethod
-    def from_bytearray(cls, buf: bytearray, size: InfoSize):
+    def from_bytearray(cls, buf: bytearray, size: InfoSize, scale: float = 1.0):
         """Creates an Info instance from a bytearray, ensuring that
            the value fits within the specified size by applying a bitmask."""
         if size.bit == 0:
-            return cls(bytearray(buf), size)
-        return cls(int.from_bytes(buf[:size.bytes], "big") & size.mask, size)
+            return cls(bytearray(buf), size, scale)
+        return cls(
+            int.from_bytes(buf[:size.bytes], "big") & size.mask, size, scale)
 
     @classmethod
-    def from_float(cls, value: float, size: InfoSize):
+    def from_float(cls, value: float, size: InfoSize, scale: float = 1.0):
         """Creates an Info instance from a float value, converting it to
            its raw bit representation based on the specified size."""
-        raw = _float_to_bits(value, size.bits)
-        return cls(raw, size)
+        raw = _value_to_raw(value, size.bits, scale)
+        return cls(raw, size, scale)
+
+    @classmethod
+    def from_int(cls, value: int, size: InfoSize, scale: float = 1.0):
+        """Creates an Info instance from a scaled integer value."""
+        return cls.from_float(float(value), size, scale)
 
     @property
     def to_unsigned_int(self) -> int:
@@ -174,10 +183,17 @@ class Info:
     @property
     def to_signed_int(self) -> int:
         """Returns the extracted bits as a signed integer."""
+        if self.info_size.bits == 0:
+            return 0
         raw = self.to_unsigned_int
         bits = self.info_size.bits
         sign_bit = 1 << (bits - 1)
         return (raw ^ sign_bit) - sign_bit
+
+    @property
+    def to_int(self) -> int:
+        """Returns the scaled numeric value as an integer."""
+        return int(round(self.to_float))
 
     @property
     def to_hex(self) -> str:
@@ -200,36 +216,36 @@ class Info:
 
     @property
     def to_float(self) -> float:
-        """Returns the extracted bits as a float."""
+        """Returns the extracted bits as a scaled float."""
         raw_int = self.to_unsigned_int
-        return _float_from_bits(raw_int, self.info_size.bits)
+        try:
+            return (FLOAT_FROM_BITS_DISPATCH[self.info_size.bits](raw_int) *
+                    self.scale)
+        except KeyError:
+            return float(raw_int) * self.scale
 
     @property
     def byte_swap(self) -> "Info":
         """Returns a new Info instance with the byte order reversed."""
         swapped_value = int.from_bytes(self.to_bytes[::-1], byteorder="big")
-        return Info(swapped_value, self.info_size)
+        return Info(swapped_value, self.info_size, self.scale)
 
 
-def _float_from_bits(raw: int, bits: int) -> float:
-    """Converts a raw integer representation of a float
-       to a Python float, based on the specified bit size.
-       Supports 16, 32, and 64 bits.
-    """
-    if bits == 64:
-        return struct.unpack('>d', struct.pack('>Q', raw))[0]
-    if bits == 32:
-        # Use struct to unpack the integer as a float
-        return struct.unpack('>f', struct.pack('>I', raw))[0]
-    if bits != 16:
-        raise ValueError("".join([
-            f"Unsupported float bit size: {bits}. ",
-            "Only 16, 32, and 64 are supported."
-        ]))
-    if HAS_STRUCT_HALF:
-        # Use struct to unpack the integer as a half-precision float
-        return struct.unpack('>e', struct.pack('>H', raw))[0]
-    # IEEE754 half-precision (16bit) → float32
+def _value_to_raw(value: float, bits: int, scale: float) -> int:
+    """Converts a scaled numeric value into a raw integer representation."""
+    if scale == 0:
+        raise ValueError("scale must not be zero")
+    scaled_value = value / scale
+    try:
+        return FLOAT_TO_BITS_DISPATCH[bits](scaled_value)
+    except KeyError:
+        if bits == 0:
+            return 0
+        return int(round(scaled_value)) & ((1 << bits) - 1)
+
+
+def _float_from_bits_half(raw: int) -> float:
+    """Converts a raw half-precision float without struct support."""
     s = (raw >> 15) & 0x0001
     e = (raw >> 10) & 0x001F
     f = raw & 0x03FF
@@ -245,44 +261,49 @@ def _float_from_bits(raw: int, bits: int) -> float:
     return (-1)**s * (1 + f / 2**10) * 2**(e - 15)
 
 
-def _float_to_bits(value: float, bits: int) -> int:
-    """Converts a Python float to its raw integer representation
-       based on the specified bit size. Supports 16, 32, and 64 bits.
-    """
-    if bits == 64:
-        return struct.unpack('>Q', struct.pack('>d', value))[0]
-    if bits == 32:
-        # Use struct to pack the float into bytes and then unpack as an integer
-        return struct.unpack('>I', struct.pack('>f', value))[0]
-    if bits != 16:
-        raise ValueError("".join([
-            f"Unsupported float bit size: {bits}. ",
-            "Only 16, 32, and 64 are supported."
-        ]))
-    if HAS_STRUCT_HALF:
-        # Use struct to pack the float into bytes and then unpack as an integer
-        return struct.unpack('>H', struct.pack('>e', value))[0]
-    # Determine the sign and absolute value
-    # Use math.copysign to correctly detect negative zero
+def _float_to_bits_half(value: float) -> int:
+    """Converts a Python float to half-precision bits without struct support."""
     sign = 1 if math.copysign(1.0, value) < 0 else 0
     v = abs(value)
 
-    # Handle zero
     if v == 0.0:
-        return sign << (bits - 1)
-
-    # NaN / Inf
+        return sign << 15
     if math.isnan(value):
         return 0x7E00
-
-    # Handle infinity
     if math.isinf(value):
         return (sign << 15) | 0x7C00
 
-    # Compute exponent and mantissa
     e = int(math.floor(math.log(v, 2)))
     mant = v / (2**e) - 1.0
 
     exp = e + 15
     frac = int(mant * (2**10))
     return (sign << 15) | (exp << 10) | frac
+
+
+def _build_float_from_bits_dispatch() -> dict[int, callable]:
+    """Builds a dispatch table for converting raw bits to floats."""
+    return {
+        16: (lambda raw: struct.unpack('>e', struct.pack('>H', raw))[0])
+        if _has_struct_half() else _float_from_bits_half,
+        32:
+        lambda raw: struct.unpack('>f', struct.pack('>I', raw))[0],
+        64:
+        lambda raw: struct.unpack('>d', struct.pack('>Q', raw))[0],
+    }
+
+
+def _build_float_to_bits_dispatch() -> dict[int, callable]:
+    """Builds a dispatch table for converting floats to raw bits."""
+    return {
+        16: (lambda value: struct.unpack('>H', struct.pack('>e', value))[0])
+        if _has_struct_half() else _float_to_bits_half,
+        32:
+        lambda value: struct.unpack('>I', struct.pack('>f', value))[0],
+        64:
+        lambda value: struct.unpack('>Q', struct.pack('>d', value))[0],
+    }
+
+
+FLOAT_FROM_BITS_DISPATCH = _build_float_from_bits_dispatch()
+FLOAT_TO_BITS_DISPATCH = _build_float_to_bits_dispatch()

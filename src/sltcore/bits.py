@@ -6,7 +6,7 @@ def bits_get(buf: bytearray, offset: InfoSize, size: InfoSize) -> Info:
     """ Extracts a slice of bits from the given bytearray
         starting at the specified bit offset and spanning
         the specified bit size. Returns an Info object containing
-        the extracted raw value and an InfoSize representing 
+        the extracted raw value and an InfoSize representing
         the size of the extracted data.
     Parameters:
     - buf (bytearray): The source bytearray to extract bits from.
@@ -100,4 +100,4 @@ def _required_bytes_for_extraction(offset: InfoSize, size: InfoSize) -> int:
     Returns:
     - int: The number of bytes required to extract the specified bit slice.
     """
-    return (offset.bit + size.bits + 7) // 8
+    return (offset.bit + size.bits + 7) >> 3

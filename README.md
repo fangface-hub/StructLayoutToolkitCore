@@ -62,6 +62,14 @@ It is used for both offset and size, allowing consistent structural layout defin
 
 Info stores an InfoSize and a raw integer value.
 
+It also supports an optional `scale` value, which defaults to `1.0` and
+represents the value of one least-significant bit.
+
+The scaled conversion helpers use this field when converting between raw
+values and numeric values. In particular, `from_float` and `from_int`
+divide by `scale` before storing raw data, and `to_float` and `to_int`
+multiply the stored value by `scale` when reading it back.
+
 This allows higher‑level code to treat extracted fields as structured units rather than plain integers.
 
 - __Field List__
@@ -103,6 +111,16 @@ This allows higher‑level code to treat extracted fields as structured units ra
   | to_bool | bool | Returns the extracted bits as a boolean value. |
   | to_float | float | Returns the extracted bits as a float. |
   | byte_swap | Info | Returns a new Info instance with the byte order reversed. |
+
+Example: Creating an Info with a scale
+
+```python
+size = InfoSize(byte=0, bit=10)
+info = Info.from_int(5, size, scale=0.5)
+
+print(info.raw_value)  # 10
+print(info.to_float)   # 5.0
+```
 
 ## sltcore.bits_get
 
