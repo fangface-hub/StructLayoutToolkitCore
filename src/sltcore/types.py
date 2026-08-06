@@ -1,4 +1,5 @@
 """Type definitions for structured data layouts and bit-level operations."""
+import json
 import math
 import struct
 from dataclasses import dataclass, field
@@ -83,6 +84,16 @@ class InfoSize:
         if total_bits < 0:
             raise ValueError("InfoSize subtraction resulted in negative size")
         return InfoSize(0, total_bits)
+
+    def to_json(self) -> str:
+        """Serializes this InfoSize to a JSON string."""
+        return json.dumps({"byte": self.byte, "bit": self.bit})
+
+    @classmethod
+    def from_json(cls, value: str | dict) -> "InfoSize":
+        """Deserializes an InfoSize from a JSON string or dict payload."""
+        payload = json.loads(value) if isinstance(value, str) else value
+        return cls(byte=payload["byte"], bit=payload["bit"])
 
 
 @total_ordering
@@ -229,6 +240,48 @@ class Info:
         """Returns a new Info instance with the byte order reversed."""
         swapped_value = int.from_bytes(self.to_bytes[::-1], byteorder="big")
         return Info(swapped_value, self.info_size, self.scale)
+
+    def to_json(self) -> str:
+        """Serializes this Info to a JSON string."""
+        if isinstance(self.raw_value, bytearray):
+            raw_value_payload = {
+                "type": "bytearray",
+                "value": self.raw_value.hex(),
+            }
+        else:
+            raw_value_payload = {
+                "type": "int",
+                "value": self.raw_value,
+            }
+
+        payload = {
+            "raw_value": raw_value_payload,
+            "info_size": {
+                "byte": self.info_size.byte,
+                "bit": self.info_size.bit,
+            },
+            "scale": self.scale,
+        }
+        return json.dumps(payload)
+
+    @classmethod
+    def from_json(cls, value: str | dict) -> "Info":
+        """Deserializes an Info from a JSON string or dict payload."""
+        payload = json.loads(value) if isinstance(value, str) else value
+
+        raw_value_payload = payload["raw_value"]
+        raw_value_type = raw_value_payload["type"]
+        if raw_value_type == "bytearray":
+            raw_value = bytearray.fromhex(raw_value_payload["value"])
+        elif raw_value_type == "int":
+            raw_value = raw_value_payload["value"]
+        else:
+            raise ValueError(f"Unsupported raw_value type: {raw_value_type}")
+
+        info_size = InfoSize.from_json(payload["info_size"])
+        return cls(raw_value=raw_value,
+                   info_size=info_size,
+                   scale=payload.get("scale", 1.0))
 
 
 def _value_to_raw(value: float, bits: int, scale: float) -> int:

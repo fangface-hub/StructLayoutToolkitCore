@@ -1,4 +1,5 @@
 """Tests for sltcore.types."""
+import json
 import math
 
 import pytest
@@ -59,6 +60,16 @@ def test_infosize_arithmetic():
 
     with pytest.raises(ValueError):
         _ = s2 - s1
+
+
+def test_infosize_json_roundtrip():
+    """InfoSize should round-trip via JSON."""
+    original = InfoSize(1, 10)
+    restored = InfoSize.from_json(original.to_json())
+
+    assert restored == original
+    assert restored.byte == original.byte
+    assert restored.bit == original.bit
 
 
 def test_info_to_signed_int():
@@ -261,3 +272,66 @@ def test_info_from_float_zero():
     info_neg_zero = Info.from_float(-0.0, InfoSize(0, 32))
     # In IEEE 754, -0.0 has the sign bit set
     assert info_neg_zero.raw_value == 0x80000000
+
+
+def test_info_json_roundtrip_with_int_raw_value():
+    """Info with integer raw_value should round-trip via JSON."""
+    original = Info.from_unsigned_int(0x2A, InfoSize(0, 8), scale=0.5)
+
+    restored = Info.from_json(original.to_json())
+
+    assert restored == original
+    assert isinstance(restored.raw_value, int)
+
+
+def test_info_json_roundtrip_with_bytearray_raw_value():
+    """Info with bytearray raw_value should round-trip via JSON."""
+    original = Info.from_bytearray(bytearray([0xAA, 0xBB]),
+                                   InfoSize(2, 0),
+                                   scale=2.0)
+
+    restored = Info.from_json(original.to_json())
+
+    assert restored == original
+    assert isinstance(restored.raw_value, bytearray)
+
+
+def test_info_from_json_supports_dict_payload():
+    """Info.from_json should accept dict payloads."""
+    payload = {
+        "raw_value": {
+            "type": "int",
+            "value": 15
+        },
+        "info_size": {
+            "byte": 0,
+            "bit": 4
+        },
+        "scale": 1.0,
+    }
+
+    info = Info.from_json(payload)
+
+    assert info.raw_value == 15
+    assert info.info_size == InfoSize(0, 4)
+    assert info.scale == 1.0
+
+
+def test_infosize_from_json_supports_dict_payload():
+    """InfoSize.from_json should accept dict payloads."""
+    payload = {"byte": 2, "bit": 1}
+
+    size = InfoSize.from_json(payload)
+
+    assert size == InfoSize(2, 1)
+
+
+def test_info_json_payload_shape():
+    """Info.to_json should include raw type and nested info_size fields."""
+    info = Info.from_unsigned_int(3, InfoSize(0, 3), scale=0.25)
+    payload = json.loads(info.to_json())
+
+    assert payload["raw_value"]["type"] == "int"
+    assert payload["raw_value"]["value"] == 3
+    assert payload["info_size"] == {"byte": 0, "bit": 3}
+    assert payload["scale"] == 0.25

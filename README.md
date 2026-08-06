@@ -58,6 +58,23 @@ It is used for both offset and size, allowing consistent structural layout defin
   | hex_digits | int | Number of hexadecimal digits needed to represent the field.<br>Since one hex digit corresponds to 4 bits, the value is calculated as ceil(bits / 4) |
   | mask | int | Bitmask for the field size.<br>It produces a mask that covers exactly bits bits, using the formula (1 << bits) - 1.<br>This mask is typically used for extracting or normalizing values. |
 
+- __JSON Conversion__
+
+  | Method | Description |
+  | --- | --- |
+  | to_json | Serializes InfoSize to a JSON string. |
+  | from_json | Deserializes InfoSize from a JSON string or dict payload. |
+
+  Example:
+
+  ```python
+  size = InfoSize(byte=1, bit=10)  # normalized to (2, 2)
+  json_text = size.to_json()
+
+  restored = InfoSize.from_json(json_text)
+  print(restored.byte, restored.bit)  # 2 2
+  ```
+
 ## sltcore.Info
 
 Info stores an InfoSize and a raw integer value.
@@ -111,6 +128,34 @@ This allows higher‑level code to treat extracted fields as structured units ra
   | to_bool | bool | Returns the extracted bits as a boolean value. |
   | to_float | float | Returns the extracted bits as a float. |
   | byte_swap | Info | Returns a new Info instance with the byte order reversed. |
+
+- __JSON Conversion__
+
+  | Method | Description |
+  | --- | --- |
+  | to_json | Serializes Info to a JSON string. |
+  | from_json | Deserializes Info from a JSON string or dict payload. |
+
+  Notes:
+
+  - For integer raw values, payload stores `raw_value.type = "int"`.
+  - For bytearray raw values, payload stores `raw_value.type = "bytearray"` and hex text.
+  - `scale` is preserved in both directions.
+
+  Example:
+
+  ```python
+  info = Info.from_unsigned_int(0x2A, InfoSize(0, 8), scale=0.5)
+  json_text = info.to_json()
+
+  restored = Info.from_json(json_text)
+  print(restored.raw_value)  # 42
+  print(restored.scale)      # 0.5
+
+  info_bytes = Info.from_bytearray(bytearray([0xAA, 0xBB]), InfoSize(2, 0))
+  restored_bytes = Info.from_json(info_bytes.to_json())
+  print(restored_bytes.to_bytes.hex())  # aabb
+  ```
 
 Example: Creating an Info with a scale
 
