@@ -46,7 +46,7 @@ def test_infosize_mask():
 
 
 def test_infosize_arithmetic():
-    """Test addition and subtraction of InfoSize."""
+    """Test addition, subtraction, multiplication, and division of InfoSize."""
     s1 = InfoSize(1, 2)
     s2 = InfoSize(0, 7)
 
@@ -57,6 +57,17 @@ def test_infosize_arithmetic():
     # Subtraction
     subbed = s1 - s2
     assert subbed.bits == s1.bits - s2.bits
+
+    # Multiplication
+    scaled = s1 * 3
+    assert scaled.bits == s1.bits * 3
+
+    scaled_right = 2 * s1
+    assert scaled_right.bits == s1.bits * 2
+
+    # Division
+    halved = s1 / 2
+    assert halved.bits == s1.bits // 2
 
     with pytest.raises(ValueError):
         _ = s2 - s1

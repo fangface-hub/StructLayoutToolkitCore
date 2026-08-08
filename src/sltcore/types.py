@@ -85,6 +85,32 @@ class InfoSize:
             raise ValueError("InfoSize subtraction resulted in negative size")
         return InfoSize(0, total_bits)
 
+    def __mul__(self, other: int) -> "InfoSize":
+        """Multiplies this InfoSize by an integer value."""
+        if not isinstance(other, int):
+            return NotImplemented
+        if other < 0:
+            raise ValueError(
+                "InfoSize multiplication by negative integers is not supported")
+        return InfoSize(0, self.bits * other)
+
+    def __rmul__(self, other: int) -> "InfoSize":
+        """Supports integer multiplication from the left."""
+        return self.__mul__(other)
+
+    def __truediv__(self, other: int) -> "InfoSize":
+        """Divides this InfoSize by an integer value using floor division."""
+        if not isinstance(other, int):
+            return NotImplemented
+        if other <= 0:
+            raise ValueError(
+                "InfoSize division by non-positive integers is not supported")
+        return InfoSize(0, self.bits // other)
+
+    def __floordiv__(self, other: int) -> "InfoSize":
+        """Divides this InfoSize by an integer value using floor division."""
+        return self.__truediv__(other)
+
     def to_json(self) -> str:
         """Serializes this InfoSize to a JSON string."""
         return json.dumps({"byte": self.byte, "bit": self.bit})

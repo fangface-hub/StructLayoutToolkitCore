@@ -38,7 +38,15 @@ print(buf.hex()) # 12345578
 ## sltcore.InfoSize
 
 InfoSize is a type that represents offsets and sizes in a unified way.
-It supports addition and subtraction, and stores both byte and bit components.
+It supports addition, subtraction, multiplication, and division by integers, and stores both byte and bit components.
+
+Multiplication scales the size by an integer factor, while division uses floor division for positive integer divisors. This makes it easy to express repeated sizes or half-sized layouts in a consistent way.
+
+```python
+size = InfoSize(1, 2)
+print(size * 3)   # 3 * (1 byte, 2 bits)
+print(size / 2)   # floor division by 2
+```
 
 It is used for both offset and size, allowing consistent structural layout definitions.
 
